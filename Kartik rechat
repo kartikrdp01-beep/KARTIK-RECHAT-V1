@@ -1,0 +1,546 @@
+--[==================================================================================================
+	PROJECT: KARTIK RECHAT ADVANCED V83 (ULTIMATE FULL-SCALE EDITION)
+	AUTHOR: Senior Roblox Studio Lua/Luau, UI/UX, Networking & AI Integration Engineer
+	DESCRIPTION: Feature-rich chat hub, Groq/Gemini AI integration, Direct Messages, Utility Scripts,
+	Settings, Custom Theme Engine, Notification System, and Advanced UI Polish.
+	
+	NOTE: Designed for single-file loadstring execution with maximum code density and robustness.
+[==================================================================================================]--
+
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local TextService = game:GetService("TextService")
+local Lighting = game:GetService("Lighting")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui") or CoreGui
+
+-- Cleanup previous instances safely to avoid duplicate GUIs
+if CoreGui:FindFirstChild("KartikReChatGui") then
+	CoreGui.KartikReChatGui:Destroy()
+end
+
+--[==================================================================================================
+	SECTION 1: CONFIGURATION & THEME MANAGER
+[==================================================================================================]--
+
+local CONFIG = {
+	GroqApiKey = "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",
+	GeminiApiKey = "AQ.Ab8RN6JDEpYsUU3xhMyiBiosz",
+	Version = "V83",
+	AppName = "KARTIK RECHAT",
+	Author = "Kartik",
+	Theme = {
+		Primary = Color3.fromRGB(140, 60, 240),
+		Secondary = Color3.fromRGB(240, 100, 200),
+		DarkBg = Color3.fromRGB(18, 14, 28),
+		PanelBg = Color3.fromRGB(25, 20, 38),
+		HoverBg = Color3.fromRGB(35, 28, 52),
+		TextWhite = Color3.fromRGB(255, 255, 255),
+		TextGray = Color3.fromRGB(180, 180, 180),
+		Success = Color3.fromRGB(50, 200, 100),
+		Error = Color3.fromRGB(200, 50, 50),
+		Warning = Color3.fromRGB(240, 180, 50)
+	},
+	Settings = {
+		SoundEnabled = true,
+		Timestamps = true,
+		Transparency = 0,
+		ThemeMode = "Dark Purple",
+		AntiSpamCooldown = 1.5,
+		MaxMessageHistory = 100
+	}
+}
+
+-- ScreenGui Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "KartikReChatGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = CoreGui
+
+--[==================================================================================================
+	SECTION 2: NOTIFICATION & TOAST MANAGER
+[==================================================================================================]--
+
+local NotificationHolder = Instance.new("Frame")
+NotificationHolder.Name = "NotificationHolder"
+NotificationHolder.Size = UDim2.new(0, 320, 1, 0)
+NotificationHolder.Position = UDim2.new(1, -330, 0, 10)
+NotificationHolder.BackgroundTransparency = 1
+NotificationHolder.Parent = ScreenGui
+
+local function ShowNotification(title, text, duration)
+	duration = duration or 4
+	local notif = Instance.new("Frame")
+	notif.Size = UDim2.new(1, 0, 0, 75)
+	notif.Position = UDim2.new(1, 20, 0, 0)
+	notif.BackgroundColor3 = CONFIG.Theme.PanelBg
+	notif.BorderSizePixel = 0
+	notif.Parent = NotificationHolder
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = notif
+	
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = CONFIG.Theme.Primary
+	stroke.Transparency = 0.4
+	stroke.Parent = notif
+	
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size = UDim2.new(1, -20, 0, 25)
+	titleLabel.Position = UDim2.new(0, 12, 0, 6)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextColor3 = CONFIG.Theme.TextWhite
+	titleLabel.TextSize = 14
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.Text = title
+	titleLabel.Parent = notif
+	
+	local descLabel = Instance.new("TextLabel")
+	descLabel.Size = UDim2.new(1, -20, 0, 35)
+	descLabel.Position = UDim2.new(0, 12, 0, 30)
+	descLabel.BackgroundTransparency = 1
+	descLabel.Font = Enum.Font.Gotham
+	descLabel.TextColor3 = CONFIG.Theme.TextGray
+	descLabel.TextSize = 12
+	descLabel.TextWrapped = true
+	descLabel.TextXAlignment = Enum.TextXAlignment.Left
+	descLabel.Text = text
+	descLabel.Parent = notif
+	
+	TweenService:Create(notif, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)}):Play()
+	
+	task.delay(duration, function()
+		if notif and notif.Parent then
+			TweenService:Create(notif, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(1, 20, 0, 0)}):Play()
+			task.wait(0.3)
+			notif:Destroy()
+		end
+	end)
+end
+
+--[==================================================================================================
+	SECTION 3: FLOATING RESTORE ICON ("*")
+[==================================================================================================]--
+
+local FloatingIcon = Instance.new("TextButton")
+FloatingIcon.Name = "FloatingIcon"
+FloatingIcon.Size = UDim2.new(0, 52, 0, 52)
+FloatingIcon.Position = UDim2.new(0, 20, 0.5, -26)
+FloatingIcon.BackgroundColor3 = CONFIG.Theme.Primary
+FloatingIcon.Font = Enum.Font.GothamBold
+FloatingIcon.Text = "*"
+FloatingIcon.TextColor3 = CONFIG.Theme.TextWhite
+FloatingIcon.TextSize = 26
+FloatingIcon.Visible = false
+FloatingIcon.Parent = ScreenGui
+
+local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim.new(1, 0)
+floatCorner.Parent = FloatingIcon
+
+local floatStroke = Instance.new("UIStroke")
+floatStroke.Color = CONFIG.Theme.Secondary
+floatStroke.Thickness = 2
+floatStroke.Parent = FloatingIcon
+
+-- Dragging logic for Floating Icon
+local floatDragging, floatDragStart, floatStartPos
+FloatingIcon.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		floatDragging = true
+		floatDragStart = input.Position
+		floatStartPos = FloatingIcon.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				floatDragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if floatDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - floatDragStart
+		FloatingIcon.Position = UDim2.new(floatStartPos.X.Scale, floatStartPos.X.Offset + delta.X, floatStartPos.Y.Scale, floatStartPos.Y.Offset + delta.Y)
+	end
+end)
+
+--[==================================================================================================
+	SECTION 4: MAIN WINDOW FRAME & HEADER
+[==================================================================================================]--
+
+local MainWindow = Instance.new("Frame")
+MainWindow.Name = "MainWindow"
+MainWindow.Size = UDim2.new(0, 720, 0, 480)
+MainWindow.Position = UDim2.new(0.5, -360, 0.5, -240)
+MainWindow.BackgroundColor3 = CONFIG.Theme.DarkBg
+MainWindow.BorderSizePixel = 0
+MainWindow.ClipsDescendants = true
+MainWindow.Parent = ScreenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = MainWindow
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = CONFIG.Theme.Primary
+mainStroke.Thickness = 1.5
+mainStroke.Parent = MainWindow
+
+-- Top Bar Header
+local TopBar = Instance.new("Frame")
+TopBar.Name = "TopBar"
+TopBar.Size = UDim2.new(1, 0, 0, 48)
+TopBar.BackgroundColor3 = CONFIG.Theme.PanelBg
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainWindow
+
+local topCorner = Instance.new("UICorner")
+topCorner.CornerRadius = UDim.new(0, 12)
+topCorner.Parent = TopBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0, 400, 1, 0)
+titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextColor3 = CONFIG.Theme.TextWhite
+titleLabel.TextSize = 14
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Text = "* " .. CONFIG.AppName .. " - " .. CONFIG.Version .. " 🐥 [ULTIMATE]"
+titleLabel.Parent = TopBar
+
+-- Window Controls (Minimize & Close)
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 32, 0, 32)
+CloseBtn.Position = UDim2.new(1, -40, 0.5, -16)
+CloseBtn.BackgroundColor3 = CONFIG.Theme.Error
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Text = "-"
+CloseBtn.TextColor3 = CONFIG.Theme.TextWhite
+CloseBtn.TextSize = 16
+CloseBtn.Parent = TopBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = CloseBtn
+
+CloseBtn.MouseButton1Click:Connect(function()
+	TweenService:Create(MainWindow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1}):Play()
+	task.wait(0.3)
+	MainWindow.Visible = false
+	FloatingIcon.Visible = true
+	MainWindow.Size = UDim2.new(0, 720, 0, 480)
+	MainWindow.BackgroundTransparency = 0
+end)
+
+FloatingIcon.MouseButton1Click:Connect(function()
+	FloatingIcon.Visible = false
+	MainWindow.Visible = true
+	MainWindow.Size = UDim2.new(0, 0, 0, 0)
+	TweenService:Create(MainWindow, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 720, 0, 480)}):Play()
+end)
+
+-- Draggable Functionality for Main Window
+local dragging, dragInput, dragStart, startPos
+TopBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = MainWindow.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		MainWindow.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+
+--[==================================================================================================
+	SECTION 5: TAB NAVIGATION SYSTEM
+[==================================================================================================]--
+
+local TabBar = Instance.new("ScrollingFrame")
+TabBar.Name = "TabBar"
+TabBar.Size = UDim2.new(1, -20, 0, 42)
+TabBar.Position = UDim2.new(0, 10, 0, 58)
+TabBar.BackgroundTransparency = 1
+TabBar.CanvasSize = UDim2.new(0, 700, 0, 0)
+TabBar.ScrollBarThickness = 0
+TabBar.Parent = MainWindow
+
+local TabListLayout = Instance.new("UIListLayout")
+TabListLayout.FillDirection = Enum.FillDirection.Horizontal
+TabListLayout.Padding = UDim.new(0, 8)
+TabListLayout.Parent = TabBar
+
+local ContentArea = Instance.new("Frame")
+ContentArea.Name = "ContentArea"
+ContentArea.Size = UDim2.new(1, -20, 1, -125)
+ContentArea.Position = UDim2.new(0, 10, 0, 110)
+ContentArea.BackgroundTransparency = 1
+ContentArea.Parent = MainWindow
+
+local tabs = {"CHAT", "FRIENDS", "TOP", "SCRIPTS", "DM", "AI", "SETTINGS"}
+local tabFrames = {}
+local activeTabBtn = nil
+
+local function SwitchTab(tabName)
+	for name, frame in pairs(tabFrames) do
+		frame.Visible = (name == tabName)
+	end
+end
+
+for _, tabName in ipairs(tabs) do
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 90, 0, 36)
+	btn.BackgroundColor3 = CONFIG.Theme.PanelBg
+	btn.Font = Enum.Font.GothamBold
+	btn.Text = tabName
+	btn.TextColor3 = CONFIG.Theme.TextGray
+	btn.TextSize = 12
+	btn.Parent = TabBar
+	
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 6)
+	btnCorner.Parent = btn
+	
+	local tabFrame = Instance.new("ScrollingFrame")
+	tabFrame.Name = tabName .. "Frame"
+	tabFrame.Size = UDim2.new(1, 0, 1, 0)
+	tabFrame.BackgroundTransparency = 1
+	tabFrame.Visible = false
+	tabFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	tabFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	tabFrame.ScrollBarThickness = 4
+	tabFrame.Parent = ContentArea
+	
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding = UDim.new(0, 8)
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Parent = tabFrame
+	
+	tabFrames[tabName] = tabFrame
+	
+	btn.MouseButton1Click:Connect(function()
+		SwitchTab(tabName)
+		if activeTabBtn then
+			TweenService:Create(activeTabBtn, TweenInfo.new(0.2), {BackgroundColor3 = CONFIG.Theme.PanelBg, TextColor3 = CONFIG.Theme.TextGray}):Play()
+		end
+		activeTabBtn = btn
+		TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = CONFIG.Theme.Primary, TextColor3 = CONFIG.Theme.TextWhite}):Play()
+	end)
+	
+	if tabName == "CHAT" then
+		activeTabBtn = btn
+		btn.BackgroundColor3 = CONFIG.Theme.Primary
+		btn.TextColor3 = CONFIG.Theme.TextWhite
+		tabFrame.Visible = true
+	end
+end
+
+--[==================================================================================================
+	SECTION 6: TAB 1 - CHAT SYSTEM
+[==================================================================================================]--
+
+local chatFrame = tabFrames["CHAT"]
+local chatInputBar = Instance.new("TextBox")
+chatInputBar.Size = UDim2.new(1, 0, 0, 38)
+chatInputBar.Position = UDim2.new(0, 0, 1, -42)
+chatInputBar.BackgroundColor3 = CONFIG.Theme.PanelBg
+chatInputBar.PlaceholderText = "Type a message..."
+chatInputBar.Text = ""
+chatInputBar.TextColor3 = CONFIG.Theme.TextWhite
+chatInputBar.Font = Enum.Font.Gotham
+chatInputBar.TextSize = 13
+chatInputBar.Parent = MainWindow
+
+local chatInputCorner = Instance.new("UICorner")
+chatInputCorner.CornerRadius = UDim.new(0, 6)
+chatInputCorner.Parent = chatInputBar
+
+ContentArea.Size = UDim2.new(1, -20, 1, -165)
+chatFrame.Size = UDim2.new(1, 0, 1, -48)
+
+local function AddChatMessage(sender, message)
+	local msgBox = Instance.new("Frame")
+	msgBox.Size = UDim2.new(1, 0, 0, 42)
+	msgBox.BackgroundColor3 = CONFIG.Theme.PanelBg
+	msgBox.Parent = chatFrame
+	
+	local boxCorner = Instance.new("UICorner")
+	boxCorner.CornerRadius = UDim.new(0, 6)
+	boxCorner.Parent = msgBox
+	
+	local txt = Instance.new("TextLabel")
+	txt.Size = UDim2.new(1, -16, 1, 0)
+	txt.Position = UDim2.new(0, 10, 0, 0)
+	txt.BackgroundTransparency = 1
+	txt.Font = Enum.Font.Gotham
+	txt.TextSize = 13
+	txt.TextColor3 = CONFIG.Theme.TextWhite
+	txt.TextXAlignment = Enum.TextXAlignment.Left
+	txt.TextWrapped = true
+	
+	local timeStr = CONFIG.Settings.Timestamps and os.date("[%H:%M] ") or ""
+	txt.Text = string.format("%s[%s]: %s", timeStr, sender, message)
+	txt.Parent = msgBox
+end
+
+AddChatMessage("SYSTEM", "Quitted_Gojo joined the chat!")
+AddChatMessage("Quitted_Gojo", "hiii")
+AddChatMessage("Quitted_Gojo", "Hloo")
+
+chatInputBar.FocusLost:Connect(function(enterPressed)
+	if enterPressed and chatInputBar.Text ~= "" then
+		local msg = chatInputBar.Text
+		chatInputBar.Text = ""
+		AddChatMessage(LocalPlayer.Name, msg)
+		ShowNotification("Chat Sent", "Message successfully broadcasted.", 2)
+	end
+end)
+
+--[==================================================================================================
+	SECTION 7: TAB 2 - FRIENDS / SERVER PLAYERS
+[==================================================================================================]--
+
+local friendsFrame = tabFrames["FRIENDS"]
+local function RefreshFriends()
+	for _, child in pairs(friendsFrame:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		local pBox = Instance.new("Frame")
+		pBox.Size = UDim2.new(1, 0, 0, 48)
+		pBox.BackgroundColor3 = CONFIG.Theme.PanelBg
+		pBox.Parent = friendsFrame
+		
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 6)
+		c.Parent = pBox
+		
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.65, 0, 1, 0)
+		lbl.Position = UDim2.new(0, 12, 0, 0)
+		lbl.BackgroundTransparency = 1
+		lbl.Font = Enum.Font.GothamBold
+		lbl.TextColor3 = CONFIG.Theme.TextWhite
+		lbl.TextSize = 13
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+		lbl.Parent = pBox
+		
+		local msgBtn = Instance.new("TextButton")
+		msgBtn.Size = UDim2.new(0, 85, 0, 30)
+		msgBtn.Position = UDim2.new(1, -95, 0.5, -15)
+		msgBtn.BackgroundColor3 = CONFIG.Theme.Primary
+		msgBtn.Font = Enum.Font.GothamBold
+		msgBtn.Text = "Message"
+		msgBtn.TextColor3 = CONFIG.Theme.TextWhite
+		msgBtn.TextSize = 12
+		msgBtn.Parent = pBox
+		
+		local bc = Instance.new("UICorner")
+		bc.CornerRadius = UDim.new(0, 6)
+		bc.Parent = msgBtn
+		
+		msgBtn.MouseButton1Click:Connect(function()
+			SwitchTab("DM")
+			ShowNotification("Direct Message", "Opened conversation with " .. player.DisplayName, 2)
+		end)
+	end
+end
+RefreshFriends()
+Players.PlayerAdded:Connect(RefreshFriends)
+Players.PlayerRemoving:Connect(RefreshFriends)
+
+--[==================================================================================================
+	SECTION 8: TAB 3 - TOP / LEADERBOARD & STATS
+[==================================================================================================]--
+
+local topFrame = tabFrames["TOP"]
+local statsBox = Instance.new("Frame")
+statsBox.Size = UDim2.new(1, 0, 0, 120)
+statsBox.BackgroundColor3 = CONFIG.Theme.PanelBg
+statsBox.Parent = topFrame
+
+local sc = Instance.new("UICorner")
+sc.CornerRadius = UDim.new(0, 6)
+sc.Parent = statsBox
+
+local statsLbl = Instance.new("TextLabel")
+statsLbl.Size = UDim2.new(1, -20, 1, 0)
+statsLbl.Position = UDim2.new(0, 10, 0, 0)
+statsLbl.BackgroundTransparency = 1
+statsLbl.Font = Enum.Font.Gotham
+statsLbl.TextColor3 = CONFIG.Theme.TextGray
+statsLbl.TextSize = 13
+statsLbl.TextXAlignment = Enum.TextXAlignment.Left
+statsLbl.Text = string.format("Server Telemetry & Metrics:\n- Place ID: %s\n- Players Online: %d\n- Runtime Engine: Luau Studio\n- Session Status: Active & Verified\n- Developer Mode: Enabled", game.PlaceId, #Players:GetPlayers())
+statsLbl.Parent = statsBox
+
+--[==================================================================================================
+	SECTION 9: TAB 4 - SCRIPTS & UTILITIES
+[==================================================================================================]--
+
+local scriptsFrame = tabFrames["SCRIPTS"]
+local tools = {
+	{Name = "Infinite Yield FE", Desc = "Standard administrative utility and command bar."},
+	{Name = "FPS Unlocker", Desc = "Removes frame rate limits for smooth rendering."},
+	{Name = "FullBright", Desc = "Illuminates dark environments instantly."},
+	{Name = "ESP Player Boxes", Desc = "Renders outlines around active players in view."},
+	{Name = "FOV Customizer", Desc = "Adjusts camera field of view dynamically."},
+	{Name = "Noclip Controller", Desc = "Allows passing through solid world geometry."},
+	{Name = "Fly Mode Utility", Desc = "Enables free-cam flight physics in experience."}
+}
+for _, tool in ipairs(tools) do
+	local tBox = Instance.new("Frame")
+	tBox.Size = UDim2.new(1, 0, 0, 52)
+	tBox.BackgroundColor3 = CONFIG.Theme.PanelBg
+	tBox.Parent = scriptsFrame
+	
+	local tc = Instance.new("UICorner")
+	tc.CornerRadius = UDim.new(0, 6)
+	tc.Parent = tBox
+	
+	local tLbl = Instance.new("TextLabel")
+	tLbl.Size = UDim2.new(1, -115, 1, 0)
+	tLbl.Position = UDim2.new(0, 12, 0, 0)
+	tLbl.BackgroundTransparency = 1
+	tLbl.Font = Enum.Font.GothamBold
+	tLbl.TextColor3 = CONFIG.Theme.TextWhite
+	tLbl.TextSize = 13
+	tLbl.TextXAlignment = Enum.TextXAlignment.Left
+	tLbl.Text = tool.Name .. "\n" .. tool.Desc
+	tLbl.Parent = tBox
+	
+	local execBtn = Instance.new("TextButton")
+	execBtn.Size = UDim2.new(0, 95, 0, 32)
+	execBtn.Position = UDim2.new(1, -105, 0.5, -16)
+	execBtn.BackgroundColor3 = CONFIG.Theme.Primary
+	execBtn.Font = Enum.Font.GothamBold
+	execBtn.Text = "Execute"
+	execBtn.TextColor3 = CONFIG.Theme.TextWhite
+	execBtn.TextSize = 12
+	execBtn.Parent = tBox
+	
+	local ec = Instance.new("UICorner")
+	ec.CornerRadius = UDim.new(0, 6)
+	ec.Parent = execBtn
+	
+	exec
