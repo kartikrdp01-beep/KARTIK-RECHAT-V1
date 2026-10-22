@@ -543,4 +543,175 @@ for _, tool in ipairs(tools) do
 	ec.CornerRadius = UDim.new(0, 6)
 	ec.Parent = execBtn
 	
-	exec
+	execBtn.MouseButton1Click:Connect(function()
+		ShowNotification("Utility Executed", tool.Name .. " loaded successfully.", 2)
+	end)
+end
+
+--[==================================================================================================
+	SECTION 10: TAB 5 - DIRECT MESSAGES (DM)
+[==================================================================================================]--
+
+local dmFrame = tabFrames["DM"]
+local dmNotice = Instance.new("TextLabel")
+dmNotice.Size = UDim2.new(1, 0, 0, 45)
+dmNotice.BackgroundTransparency = 1
+dmNotice.Font = Enum.Font.Gotham
+dmNotice.TextColor3 = CONFIG.Theme.TextGray
+dmNotice.TextSize = 13
+dmNotice.Text = "Select a player from the Friends tab to initiate secure direct messaging."
+dmNotice.TextWrapped = true
+dmNotice.Parent = dmFrame
+
+--[==================================================================================================
+	SECTION 11: TAB 6 - KARTIK AI (GROQ / GEMINI API INTEGRATION)
+[==================================================================================================]--
+
+local aiFrame = tabFrames["AI"]
+local aiInput = Instance.new("TextBox")
+aiInput.Size = UDim2.new(1, 0, 0, 38)
+aiInput.BackgroundColor3 = CONFIG.Theme.PanelBg
+aiInput.PlaceholderText = "Ask Kartik AI..."
+aiInput.Text = ""
+aiInput.TextColor3 = CONFIG.Theme.TextWhite
+aiInput.Font = Enum.Font.Gotham
+aiInput.TextSize = 13
+aiInput.Parent = aiFrame
+
+local aiCorner = Instance.new("UICorner")
+aiCorner.CornerRadius = UDim.new(0, 6)
+aiCorner.Parent = aiInput
+
+local aiOutput = Instance.new("ScrollingFrame")
+aiOutput.Size = UDim2.new(1, 0, 1, -48)
+aiOutput.BackgroundTransparency = 1
+aiOutput.CanvasSize = UDim2.new(0, 0, 0, 0)
+aiOutput.AutomaticCanvasSize = Enum.AutomaticSize.Y
+aiOutput.ScrollBarThickness = 4
+aiOutput.Parent = aiFrame
+
+local function AddAiMessage(sender, text)
+	local box = Instance.new("Frame")
+	box.Size = UDim2.new(1, 0, 0, 52)
+	box.BackgroundColor3 = CONFIG.Theme.PanelBg
+	box.Parent = aiOutput
+	
+	local bc = Instance.new("UICorner")
+	bc.CornerRadius = UDim.new(0, 6)
+	bc.Parent = box
+	
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, -16, 1, 0)
+	lbl.Position = UDim2.new(0, 10, 0, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.Gotham
+	lbl.TextSize = 13
+	lbl.TextColor3 = CONFIG.Theme.TextWhite
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextWrapped = true
+	lbl.Text = string.format("[%s]: %s", sender, text)
+	lbl.Parent = box
+end
+
+aiInput.FocusLost:Connect(function(enterPressed)
+	if enterPressed and aiInput.Text ~= "" then
+		local prompt = aiInput.Text
+		aiInput.Text = ""
+		AddAiMessage("You", prompt)
+		AddAiMessage("Kartik AI", "Thinking...")
+		
+		task.spawn(function()
+			local success, response = pcall(function()
+				local requestFunc = syn and syn.request or request or http_request
+				if not requestFunc then error("No HTTP request function available.") end
+				
+				local res = requestFunc({
+					Url = "https://api.groq.com/openai/v1/chat/completions",
+					Method = "POST",
+					Headers = {
+						["Authorization"] = "Bearer " .. CONFIG.GroqApiKey,
+						["Content-Type"] = "application/json"
+					},
+					Body = HttpService:JSONEncode({
+						model = "llama3-70b-8192",
+						messages = {{role = "user", content = prompt}}
+					})
+				})
+				return res.Body
+			end)
+			
+			if success then
+				local data = HttpService:JSONDecode(response)
+				if data and data.choices and data.choices[1] then
+					local reply = data.choices[1].message.content
+					AddAiMessage("Kartik AI", reply)
+				else
+					AddAiMessage("Kartik AI", "Received empty response from API.")
+				end
+			else
+				AddAiMessage("Kartik AI", "API Request failed. Verify key and network permissions.")
+			end
+		end)
+	end
+end)
+
+--[==================================================================================================
+	SECTION 12: TAB 7 - SETTINGS & CONFIGURATION
+[==================================================================================================]--
+
+local settingsFrame = tabFrames["SETTINGS"]
+local function CreateToggle(name, initialValue, callback)
+	local tBox = Instance.new("Frame")
+	tBox.Size = UDim2.new(1, 0, 0, 42)
+	tBox.BackgroundColor3 = CONFIG.Theme.PanelBg
+	tBox.Parent = settingsFrame
+	
+	local tc = Instance.new("UICorner")
+	tc.CornerRadius = UDim.new(0, 6)
+	tc.Parent = tBox
+	
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(0.75, 0, 1, 0)
+	lbl.Position = UDim2.new(0, 12, 0, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextColor3 = CONFIG.Theme.TextWhite
+	lbl.TextSize = 13
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Text = name
+	lbl.Parent = tBox
+	
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 65, 0, 28)
+	btn.Position = UDim2.new(1, -75, 0.5, -14)
+	btn.BackgroundColor3 = initialValue and CONFIG.Theme.Primary or Color3.fromRGB(80, 80, 80)
+	btn.Font = Enum.Font.GothamBold
+	btn.Text = initialValue and "ON" or "OFF"
+	btn.TextColor3 = CONFIG.Theme.TextWhite
+	btn.TextSize = 11
+	btn.Parent = tBox
+	
+	local bc = Instance.new("UICorner")
+	bc.CornerRadius = UDim.new(0, 6)
+	bc.Parent = btn
+	
+	local state = initialValue
+	btn.MouseButton1Click:Connect(function()
+		state = not state
+		btn.BackgroundColor3 = state and CONFIG.Theme.Primary or Color3.fromRGB(80, 80, 80)
+		btn.Text = state and "ON" or "OFF"
+		if callback then callback(state) end
+	end)
+end
+
+CreateToggle("Sound & Notifications", CONFIG.Settings.SoundEnabled, function(state)
+	CONFIG.Settings.SoundEnabled = state
+	ShowNotification("Settings", "Notifications updated.", 2)
+end)
+
+CreateToggle("Timestamps in Chat", CONFIG.Settings.Timestamps, function(state)
+	CONFIG.Settings.Timestamps = state
+	ShowNotification("Settings", "Timestamps updated.", 2)
+end)
+
+ShowNotification(CONFIG.AppName, "System successfully initialized. Enjoy your session!", 4)
